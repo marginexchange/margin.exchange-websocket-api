@@ -214,7 +214,7 @@ In order to authorize you should send request like this.
  - NONCE = any integer, that should be +1 each next request.
  - PAYLOAD = encode_base64(PAYLOAD_DATA + NONCE)
  - SIGANTURE = encode_base64(hmac sa256(PAYLOAD, API_SECRET))
-For more details and examples see ***REST API***(https://github.com/marginexchange/margin.exchange-rest-api) doc.
+For more details and examples see ***REST API*** https://github.com/marginexchange/margin.exchange-rest-api
 
 ```javascript
 {
@@ -238,13 +238,13 @@ Auth reply
 
 
 ## MY_ORDERS
- - Requires auth: No
+ - Requires auth: Yes
  
 Parameters
 
 Type | Required | Description
 ----- | ------ | -------------
-MARKET | Yes  | Market ID or "\*" for all markets
+MARKET | Yes  | Market UID or "\*" for all markets
 MARKET_TYPE | Required if MARKET="\*" | "EXCHANGE" or "FUNDING"
 
 ### MY_ORDERS snapshot event
@@ -359,7 +359,7 @@ Parameters
 
 Type | Required | Description
 ----- | ------ | -------------
-MARKET | Yes  | Market ID or "\*" for all markets
+MARKET | Yes  | Market UID or "\*" for all markets
 MARKET_TYPE | Required if MARKET="\*" | "EXCHANGE" or "FUNDING"
 
 Will return last 20 (may change in future) your orders (cancelled /or fulfilled) sorted by END_DT.
@@ -378,7 +378,7 @@ Request example:
 }
 ```
 
-### ORDER_HISTORY snapshot event
+### MY_ORDER_HISTORY snapshot event
 ```javascript
 {
 	"CMD" : "SNAPSHOT",
@@ -396,3 +396,80 @@ DATA will hold your completed orders. ORDER structure is same as for "MY_ORDER" 
 - You will get MY_ORDER_EVENT with EVENT_TYPE="REMOVE"
 - You will get MY_ORDER_HISTORY event with this order.
 *Note* events may arrive in any order.
+
+
+
+## CURRENCY_BALANCE
+ - Requires auth: Yes
+ 
+Parameters
+
+Type | Required | Description
+----- | ------ | -------------
+WALLET | Yes  | Array of "EXCHANGE", "MARGIN", "FUNDING"
+CURRENCY| Yes  | Array of currency UID or "\*"
+
+Request example:
+
+```javascript
+{
+	"CMD": "SUBSCRIBE",
+	'DATA': [
+		{
+			"TYPE" : "CURRENCY_BALANCE",
+			"WALLET" : ['EXCHANGE', 'MARGIN', 'FUNDING'],
+			"CURRENCY" : ['*']
+		}
+	]
+}
+```
+
+***NOTE*** For now , there is no SNAPSHOT for CURRENCY_BALANCE subscription.
+If you need to get current balances - use REST api request.
+
+Balance change events:
+```javascript
+{
+	"CMD" : "USER_BALANCE_CHANGE",
+	"ACC_TYPE" : "EXCHANGE", //"EXCHANGE" or "MARGIN" or "FUNDING"
+	"CURRENCY": "USD",		//currency_uid
+	"TOTAL" : 10.23,
+	"LOCKED" : 0,
+	"PENDING" : 0,
+	"AVAIL" : 10.23
+}
+```
+
+
+## USER_NOTIFICATION
+ - Requires auth: Yes
+ - No parameters available
+
+
+Request example:
+
+```javascript
+{
+	"CMD": "SUBSCRIBE",
+	'DATA': [
+		{
+			"TYPE" : "USER_NOTIFICATION"
+		}
+	]
+}
+```
+
+User notification events:
+```javascript
+{
+	"CMD" : "USER_NOTIFICATION",
+	"TYPE" : "ORDER_SUBMIT_OK", //"ORDER_SUBMIT_OK" or "ORDER_CANCEL_OK" or "ORDER_EDIT_OK" or "ORDER_PARTIALLY_FILLED" or "ORDER_FULLFILLED" or "MARGIN_ACTIVE_EDIT_OK"
+	"MARKET_ID": 3,
+	"MARKET_UID": "BTCUSD",
+	"USER_ID": 44212
+	"ORDER_ID": 3454220, // for ORDER events
+	"MARGIN_ACTIVE_ID" : 3,		// for TYPE="MARGIN_ACTIVE_EDIT_OK"
+	"TEXT" : "Your order limit BUY 0.2 @ 6900.00 submitted"
+}
+```
+

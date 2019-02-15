@@ -75,6 +75,7 @@
 						<button onclick="Subscribe('ORDER_BOOK')">BTCUSD ORDER_BOOK</button>
 						<button onclick="Subscribe('ORDER_HISTORY')">BTCUSD Trades (ORDER_HISTORY)</button>
 						<button onclick="Subscribe('MY_ORDERS')">BTCUSD MY_ORDERS</button>
+						<button onclick="Subscribe('CURRENCY_BALANCE')">CURRENCY_BALANCE</button>
 						
 						<button onclick="$('#DDD').val('')">Clear text</button>
 					</td>
@@ -126,6 +127,22 @@
 	
 	
 	function Subscribe (w) {
+		
+		if (w == 'CURRENCY_BALANCE') {
+			MARKET_CONNECTION.send_message({
+			'CMD': 'SUBSCRIBE',
+			'DATA': [
+				{
+					"TYPE" : "CURRENCY_BALANCE",
+					"WALLET" : ['EXCHANGE', 'MARGIN', 'FUNDING'],
+					"CURRENCY" : ['*']
+				}
+			]
+		}, false);
+		
+			return;
+		};
+		
 		
 		MARKET_CONNECTION.send_message({
 			'CMD': 'SUBSCRIBE',
