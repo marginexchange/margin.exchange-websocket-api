@@ -1,0 +1,504 @@
+<html>
+	
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		
+		<title>https://Margin.exchange WS test example</title>
+		
+		<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	</head>
+	
+	
+	<body>
+		
+		<h1>Margin.exchange Websocket API example</h1>
+		<a href="https://margin.exchange">https://margin.exchange</a><br>
+		<br>
+		<br>
+		
+		<b>
+		This script requires CryptoJS library to make auth requests.<br>
+		Check source code (or error console) to be sure scripts is still availbale on CDN.<br>
+		</b>
+		<br><br>
+		
+
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/hmac-sha256.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/enc-base64-min.js"></script>
+
+	
+		<div >
+			
+			<table style="width: 100%;">
+				<tr>
+					<td style="width: 30%;">Api key: </td>
+					<td><input style="width: 300px;" type="text" id="API_REQUEST_API_KEY" value=""></td>
+				</tr>
+				
+				<tr>
+					<td>Api secret: </td>
+					<td><input style="width: 300px;" type="text" id="API_REQUEST_API_SECRET" value=""></td>
+				</tr>
+				
+				<tr>
+					<td>Api nonce: </td>
+					<td><input style="width: 300px;" type="text" id="API_REQUEST_API_NONCE" value="" placeholder="empty for unix time"></td>
+				</tr>
+				
+				<tr>
+					<td>Api Domain: </td>
+					<td>
+						<input style="width: 300px;" type="text" id="WS_DOMAIN" value="wss://ws.margin.exchange">
+					</td>
+				</tr>
+				
+				
+				<tr>
+					<td colspan=2>
+						WS socket:
+						<button onclick="WS_Connect(event)">CONNECT</button>
+						<button onclick="WS_DisConnect(event)">DISCONNECT</button>
+					</td>
+				</tr>
+				
+				
+				<tr>
+					<td colspan=2>
+						Authorize <button onclick="WsAuth()">Auth</button>						
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan=2>
+						Subscribe for:
+						<button onclick="Subscribe('ORDER_BOOK')">BTCUSD ORDER_BOOK</button>
+						<button onclick="Subscribe('ORDER_HISTORY')">BTCUSD Trades (ORDER_HISTORY)</button>
+						<button onclick="Subscribe('MY_ORDERS')">BTCUSD MY_ORDERS</button>
+						
+						<button onclick="$('#DDD').val('')">Clear text</button>
+					</td>
+				</tr>
+			</table>
+			
+			<textarea style="width: 100%; height: 500px;" id="DDD"></textarea>
+		</div>
+		
+		
+		
+<script>
+	
+	function WsAuth () {
+		
+		if (($('#API_REQUEST_API_KEY').val() == '') || ($('#API_REQUEST_API_SECRET').val() == '')) {
+			alert("This requires API KEY / API SECRET");
+			//return;  //no return, send request. lets see error
+		};
+
+
+		var nonce = $('#API_REQUEST_API_NONCE').val() ? $('#API_REQUEST_API_NONCE').val() : Math.round(Date.now() / 1000);
+		
+		var payload_data = Date.now().toString();
+		var payload = window.btoa(payload_data + nonce);	
+		var signature = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(payload, $('#API_REQUEST_API_SECRET').val()));
+
+		MARKET_CONNECTION.send_message({
+			'CMD' : 'AUTH_API',
+			'APIKEY' : $('#API_REQUEST_API_KEY').val(),
+			'NONCE' : nonce,
+			'SIGNATURE' : signature,
+			'PAYLOAD_DATA' : payload_data,
+			'PAYLOAD' : payload,
+		});
+	};
+	
+	function WS_Connect () {
+		if (MARKET_CONNECTION.connected) {
+			WS_DisConnect();
+		};
+		
+		MARKET_CONNECTION.init($('#WS_DOMAIN').val());
+	};
+	
+	function WS_DisConnect() {
+		MARKET_CONNECTION.disconnect();
+	};
+	
+	
+	function Subscribe (w) {
+		
+		MARKET_CONNECTION.send_message({
+			'CMD': 'SUBSCRIBE',
+			'DATA': [
+				{
+					'TYPE' : w,
+					'MARKET': 'BTCUSD'
+				}
+			]
+		}, false);
+		
+	};
+	
+var MARKET_CONNECTION = {
+	debug: true,
+	domain : '',
+	socket: '',
+	auth: '',
+	connected: false,
+	initialized: false,
+	send_queue: [],
+	partial_data : [],
+	
+	callbacks: {
+		on_connect: function () {
+			MARKET_CONNECTION.debug_log("Connected");
+		},
+		on_connecting: function () {
+			MARKET_CONNECTION.debug_log("Connecting ...");
+		},
+		on_disconnect: function () {
+			MARKET_CONNECTION.debug_log("Disconnected");
+		},
+		
+		on_general_error: function () {
+			MARKET_CONNECTION.debug_log("Error");
+		},
+		
+		on_auth_ok: function () {
+			MARKET_CONNECTION.debug_log("AUTH ok");
+		},
+		on_auth_fail: function () {
+			MARKET_CONNECTION.debug_log("AUTH FAIL");
+		},
+		
+		on_snapshot: function (struct) {
+			MARKET_CONNECTION.debug_log("GOT Snapshot");
+		},
+		
+		on_subscriptions: '',
+		on_order_book_event: '',
+		on_my_order_event: '',
+		on_my_order_history_event: '',
+		on_my_margin_position_event: '',
+		on_my_margin_summary_event: '',
+		on_my_margin_summary_changed_event: '',
+		on_my_funding_position_event: '',
+		on_balance_change_event: '',
+		on_notification: '',
+		on_market_order_history_event: '',
+		on_tick_data: '',
+		on_tick_chart_period_change: '',
+		on_tick_chart_current_data: ''
+	},
+	
+	
+	WS_on_open : function () {
+		MARKET_CONNECTION.connected = true;
+		MARKET_CONNECTION.call_callback('on_connect');
+	},
+	
+	WS_on_close : function (event) {
+		MARKET_CONNECTION.connected = false;
+			
+  	if (event.wasClean) {
+  		MARKET_CONNECTION.debug_log("Socket CLEAN close");
+  	} else {
+  		MARKET_CONNECTION.debug_log("Socket UNCLEAN close");
+  	};
+  	
+  	var msg = 'Socket close' + event.code + ' Reason: ' + event.reason;
+  	MARKET_CONNECTION.debug_log(msg);
+  	MARKET_CONNECTION.call_callback('on_disconnect', msg);
+	},
+	
+	WS_on_error : function (error) {
+  	var msg = "Socket error: " + error.message;
+	  MARKET_CONNECTION.debug_log(msg);
+	  MARKET_CONNECTION.call_callback('on_disconnect', msg);
+	},
+	
+	WS_on_message : function (event) {
+		MARKET_CONNECTION.process_message(event.data);
+	},
+	
+	init: function (domain) {
+		
+		if (MARKET_CONNECTION.initialized) {
+			MARKET_CONNECTION.socket.onopen = null;
+			MARKET_CONNECTION.socket.onclose = null;
+			MARKET_CONNECTION.socket.close();
+			MARKET_CONNECTION.socket = null;
+		};
+		
+		MARKET_CONNECTION.connected = false;
+		MARKET_CONNECTION.initialized = false;
+		MARKET_CONNECTION.auth = '';
+		MARKET_CONNECTION.send_queue = [];
+		MARKET_CONNECTION.domain = domain;
+		
+		
+
+		
+		MARKET_CONNECTION.call_callback('on_connecting');
+		MARKET_CONNECTION.debug_log('NEW socket');
+		MARKET_CONNECTION.socket = new WebSocket(domain);
+		MARKET_CONNECTION.socket.onopen = MARKET_CONNECTION.WS_on_open;
+		MARKET_CONNECTION.socket.onclose = MARKET_CONNECTION.WS_on_close;
+	  MARKET_CONNECTION.socket.onerror = MARKET_CONNECTION.WS_on_error;
+		MARKET_CONNECTION.socket.onmessage = MARKET_CONNECTION.WS_on_message;
+	  
+	  MARKET_CONNECTION.initialized = true;
+	},
+	
+	disconnect: function () {
+		MARKET_CONNECTION.connected = false;
+		
+		if (MARKET_CONNECTION.initialized) {
+			MARKET_CONNECTION.socket.close();
+			MARKET_CONNECTION.socket = null;
+			MARKET_CONNECTION.initialized = false;
+		};
+	},
+	
+	authorize : function (auth) {
+		MARKET_CONNECTION.auth = auth;
+		
+		if (auth) {
+			MARKET_CONNECTION.send_message({
+				'CMD': 'AUTH',
+				'DATA': MARKET_CONNECTION.auth,
+			}, true);
+		} else {
+			MARKET_CONNECTION.call_callback('on_auth_fail', 'Auth data not supplied');
+		};
+	},
+
+	
+	send_message: function (msg, enqueue) {
+		if (MARKET_CONNECTION.connected || enqueue) {
+			MARKET_CONNECTION.send_queue.push(msg);
+		};
+		
+		var r = MARKET_CONNECTION.process_queue();
+		if (MARKET_CONNECTION.connected) return r;
+		if (enqueue) return 1;
+		return 0;
+	},
+	
+	process_queue: function () {
+		if (! MARKET_CONNECTION.connected) return 0;
+		
+		for (var i=0; i < MARKET_CONNECTION.send_queue.length; i++) {
+			var msg = MARKET_CONNECTION.send_queue[i];			
+			var txt = JSON.stringify(msg);
+			MARKET_CONNECTION.debug_log('OUT msg: ' + txt);
+			MARKET_CONNECTION.socket.send(txt);
+		};
+		
+		//empty
+		MARKET_CONNECTION.send_queue = [];
+		return 1;
+	},
+	
+	process_message: function (msg) {
+		MARKET_CONNECTION.debug_log('IN msg: ' + msg);
+
+		var struct;
+		
+		try {
+			struct = JSON.parse(msg);
+		} catch (e) {
+			MARKET_CONNECTION.debug_log('Unparsed IN msg: ' + msg);
+			return;
+		};
+		
+		MARKET_CONNECTION.process_message_struct(struct);
+	},
+	
+	process_message_struct: function (struct) {
+		
+		if (struct['CMD'] == 'ORDER_BOOK_EVENT') {
+			MARKET_CONNECTION.call_callback('on_order_book_event', struct);
+			return;
+		};
+		
+		
+		if (struct['CMD'] == 'TICK_DATA') {
+			MARKET_CONNECTION.call_callback('on_tick_data', struct['MARKET_ID'], struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'TICK_CHART_PERIOD_CHANGE') {
+			MARKET_CONNECTION.call_callback('on_tick_chart_period_change', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'TICK_CHART_CURRENT_DATA') {
+			MARKET_CONNECTION.call_callback('on_tick_chart_current_data', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_ORDER_EVENT') {
+			MARKET_CONNECTION.call_callback('on_my_order_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_ORDER_HISTORY_EVENT') {
+			MARKET_CONNECTION.call_callback('on_my_order_history_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_MARGIN_POSITION_EVENT') {
+			MARKET_CONNECTION.call_callback('on_my_margin_position_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_MARGIN_SUMMARY') {
+			MARKET_CONNECTION.call_callback('on_my_margin_summary_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_MARGIN_SUMMARY_CHANGED') {
+			MARKET_CONNECTION.call_callback('on_my_margin_summary_changed_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MY_FUNDING_POSITION_EVENT') {
+			MARKET_CONNECTION.call_callback('on_my_funding_position_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'USER_BALANCE_CHANGE') {
+			MARKET_CONNECTION.call_callback('on_balance_change_event', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'USER_NOTIFICATION') {
+			MARKET_CONNECTION.call_callback('on_notification', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'MARKET_ORDER_HISTORY') {
+			MARKET_CONNECTION.call_callback('on_market_order_history_event', struct);
+			return;
+		};
+		
+		
+		if (struct['CMD'] == 'AUTH_WEB_TOKEN_RESULT') {
+			if (struct['DATA'] == 1) {
+				MARKET_CONNECTION.call_callback('on_auth_ok');
+			} else {
+				MARKET_CONNECTION.call_callback('on_auth_fail', struct['MESSAGE']);
+			};
+			
+			return;
+		};
+		
+		
+		if (struct['CMD'] == 'SNAPSHOT') {
+			MARKET_CONNECTION.call_callback('on_snapshot', struct);
+			return;
+		};
+		
+		if (struct['CMD'] == 'INIT_MARKET_RESULT') {
+			if (struct['DATA'] == 1) {
+				// all ok, waiting for FULL STATE
+			} else {
+				MARKET_CONNECTION.call_callback('on_general_error', 'Market initialization failed.');
+				MARKET_CONNECTION.disconnect();
+			};
+			
+			return;
+		};
+		
+		if (struct['CMD'] == 'FATAL') {		//cancel any further queries
+			MARKET_CONNECTION.call_callback('on_general_error', struct['DATA']['MSG']);
+			MARKET_CONNECTION.disconnect();
+			return;
+		};
+		
+		if (struct['CMD'] == 'PARTIAL_DATA') {
+			MARKET_CONNECTION.partial_data.push(struct['DATA']);
+			return;
+		};
+		
+		if (struct['CMD'] == 'PARTIAL_DATA_FINISH') {
+			let this_struct = struct['HEADER'];
+			
+			
+			if (struct['JOIN_TYPE'] == 'array') {
+				this_struct['DATA'] = [];
+				
+				for (var i=0; i < MARKET_CONNECTION.partial_data.length; i++) {
+					this_struct['DATA'] = this_struct['DATA'].concat(MARKET_CONNECTION.partial_data[i]);
+				};
+			};
+			
+			if (struct['JOIN_TYPE'] == 'hash') {
+				this_struct['DATA'] = {};
+				
+				for (var i=0; i < MARKET_CONNECTION.partial_data.length; i++) {
+					for (var el_key in MARKET_CONNECTION.partial_data[i]) {
+						
+						if (typeof this_struct['DATA'][el_key] == 'undefined') {
+							this_struct['DATA'][el_key] = MARKET_CONNECTION.partial_data[i][el_key];
+						};
+						
+						if (typeof this_struct['DATA'][el_key] == 'array') {
+							this_struct['DATA'][el_key] = this_struct['DATA'][el_key].concat(MARKET_CONNECTION.partial_data[i][el_key]);
+						};
+						
+					};
+				};
+			};
+			
+			
+			MARKET_CONNECTION.process_message_struct(this_struct);
+			MARKET_CONNECTION.partial_data = [];
+			return;
+		};
+		
+		
+		if (struct['CMD'] == 'SUBSCRIPTIONS') {
+			MARKET_CONNECTION.call_callback('on_subscriptions', struct['DATA']);
+			return;
+		};
+		
+		if (struct['CMD'] == 'PING') {
+			MARKET_CONNECTION.send_message({'CMD': 'PONG'}, false);
+			return;
+		};
+		
+		if (struct['CMD'] == 'ERROR') {
+			MARKET_CONNECTION.call_callback('on_general_error', struct['DATA']['MSG']);
+			return;
+		};
+	},
+	
+	call_callback: function (cb, p1, p2, p3) {
+		if (typeof MARKET_CONNECTION.callbacks[cb] == 'function') {
+			try {
+				MARKET_CONNECTION.callbacks[cb](p1, p2, p3);
+			} catch (e) {
+				console.error('call_callback [' + cb + '] error: ' , e.message);
+				console.error('param1: ', p1);
+				console.error('param2: ', p2);
+				console.error('param3: ', p3);
+			};
+		};
+	},
+	
+	debug_log: function (msg) {
+		if (MARKET_CONNECTION.debug) {
+			$('#DDD')[0].value += msg + "\n";
+		};
+	},
+	
+	__dummy_ : function () {}
+};
+	
+</script>
+		
+				
+	</body>
+</html>
