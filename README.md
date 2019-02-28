@@ -107,18 +107,24 @@ So, if there is a price that should appear on top of list - you will receive "RE
 ```javascript
 {
 	"CMD": "ORDER_BOOK_EVENT",
+	"MARKET_UID" : "BTCUSD",
+	"MARKET_ID" : 3,
 	"EVENT_TYPE" : "ADD",	// you should add this order (price) to your order book
 	"ORDER" : { ... order data ...}
 }
 
 {
 	"CMD": "ORDER_BOOK_EVENT",
+	"MARKET_UID" : "BTCUSD",
+	"MARKET_ID" : 3,
 	"EVENT_TYPE" : "UPDATE",		// you should update this order (price) at your order book
 	"ORDER" : { ... order data ...}
 }
 	
 {
 	"CMD": "ORDER_BOOK_EVENT",
+	"MARKET_UID" : "BTCUSD",
+	"MARKET_ID" : 3,
 	"EVENT_TYPE" : "REMOVE",		// you should add this order (price) to your order book
 	"ORDER" : { ... order data ...}
 }
